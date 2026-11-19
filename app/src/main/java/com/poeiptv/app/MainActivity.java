@@ -8,7 +8,12 @@ import android.view.ViewGroup;
 import android.widget.*;
 import android.text.InputType;
 import android.net.Uri;
-import android.media.MediaPlayer;
+
+import androidx.media3.common.MediaItem;
+import androidx.media3.common.PlaybackException;
+import androidx.media3.common.Player;
+import androidx.media3.exoplayer.ExoPlayer;
+import androidx.media3.ui.PlayerView;
 
 import java.net.URL;
 import java.net.HttpURLConnection;
@@ -24,7 +29,8 @@ public class MainActivity extends Activity {
     private ArrayAdapter<String> adapter;
     private ArrayList<String> canais = new ArrayList<>();
     private ArrayList<String> enderecos = new ArrayList<>();
-    private VideoView video;
+    private ExoPlayer player;
+    private PlayerView playerView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -32,7 +38,7 @@ public class MainActivity extends Activity {
 
         LinearLayout layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setPadding(20, 25, 20, 20);
+        layout.setPadding(16, 20, 16, 16);
         layout.setBackgroundColor(Color.rgb(15, 20, 30));
 
         TextView titulo = new TextView(this);
@@ -57,14 +63,11 @@ public class MainActivity extends Activity {
         status.setTextColor(Color.WHITE);
         layout.addView(status);
 
-        video = new VideoView(this);
-        video.setBackgroundColor(Color.BLACK);
-
-        int altura = (int) (220 * getResources()
-            .getDisplayMetrics().density);
-
-        layout.addView(video, new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT, altura
+        playerView = new PlayerView(this);
+        playerView.setBackgroundColor(Color.BLACK);
+        layout.addView(playerView, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            (int) (220 * getResources().getDisplayMetrics().density)
         ));
 
         ListView lista = new ListView(this);
@@ -76,25 +79,27 @@ public class MainActivity extends Activity {
         lista.setAdapter(adapter);
 
         layout.addView(lista, new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,
-            0, 1
+            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1
         ));
+
+        player = new ExoPlayer.Builder(this).build();
+        playerView.setPlayer(player);
+
+        player.addListener(new Player.Listener() {
+            @Override
+            public void onPlayerError(PlaybackException error) {
+                status.setText("Erro ao reproduzir. Formato não compatível ou transmissão indisponível.");
+            }
+        });
 
         lista.setOnItemClickListener((parent, view, position, id) -> {
             String endereco = enderecos.get(position);
             status.setText("Abrindo: " + canais.get(position));
 
-            video.setVideoURI(Uri.parse(endereco));
-
-            video.setOnPreparedListener(mp -> {
-                video.start();
-                status.setText("Reproduzindo: " + canais.get(position));
-            });
-
-            video.setOnErrorListener((mp, what, extra) -> {
-                status.setText("Não foi possível reproduzir este canal.");
-                return true;
-            });
+            MediaItem item = MediaItem.fromUri(Uri.parse(endereco));
+            player.setMediaItem(item);
+            player.prepare();
+            player.play();
         });
 
         carregar.setOnClickListener(v -> {
@@ -115,7 +120,6 @@ public class MainActivity extends Activity {
                 try {
                     conexao = (HttpURLConnection)
                         new URL(endereco).openConnection();
-
                     conexao.setConnectTimeout(15000);
                     conexao.setReadTimeout(20000);
                     conexao.setRequestProperty(
@@ -161,23 +165,18 @@ public class MainActivity extends Activity {
                     runOnUiThread(() -> {
                         canais.clear();
                         canais.addAll(novosCanais);
-
                         enderecos.clear();
                         enderecos.addAll(novosEnderecos);
-
                         adapter.notifyDataSetChanged();
 
                         status.setText(canais.size()
-                            + " canais encontrados. Toque em um canal.");
-
+                            + " canais encontrados.");
                         carregar.setEnabled(true);
                     });
 
                 } catch (Exception e) {
                     runOnUiThread(() -> {
-                        status.setText(
-                            "Não foi possível carregar a lista."
-                        );
+                        status.setText("Não foi possível carregar a lista.");
                         carregar.setEnabled(true);
                     });
                 } finally {
@@ -189,5 +188,14 @@ public class MainActivity extends Activity {
         });
 
         setContentView(layout);
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (player != null) {
+            player.release();
+            player = null;
+        }
+        super.onDestroy();
     }
 }
