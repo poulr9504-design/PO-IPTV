@@ -7,6 +7,8 @@ import android.graphics.Color;
 import android.view.ViewGroup;
 import android.widget.*;
 import android.text.InputType;
+import android.net.Uri;
+import android.media.MediaPlayer;
 
 import java.net.URL;
 import java.net.HttpURLConnection;
@@ -21,6 +23,8 @@ public class MainActivity extends Activity {
     private TextView status;
     private ArrayAdapter<String> adapter;
     private ArrayList<String> canais = new ArrayList<>();
+    private ArrayList<String> enderecos = new ArrayList<>();
+    private VideoView video;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -28,12 +32,12 @@ public class MainActivity extends Activity {
 
         LinearLayout layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setPadding(25, 30, 25, 25);
+        layout.setPadding(20, 25, 20, 20);
         layout.setBackgroundColor(Color.rgb(15, 20, 30));
 
         TextView titulo = new TextView(this);
         titulo.setText("POE IPTV");
-        titulo.setTextSize(30);
+        titulo.setTextSize(28);
         titulo.setTextColor(Color.WHITE);
         layout.addView(titulo);
 
@@ -53,6 +57,16 @@ public class MainActivity extends Activity {
         status.setTextColor(Color.WHITE);
         layout.addView(status);
 
+        video = new VideoView(this);
+        video.setBackgroundColor(Color.BLACK);
+
+        int altura = (int) (220 * getResources()
+            .getDisplayMetrics().density);
+
+        layout.addView(video, new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT, altura
+        ));
+
         ListView lista = new ListView(this);
         adapter = new ArrayAdapter<>(
             this,
@@ -63,9 +77,25 @@ public class MainActivity extends Activity {
 
         layout.addView(lista, new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
-            0,
-            1
+            0, 1
         ));
+
+        lista.setOnItemClickListener((parent, view, position, id) -> {
+            String endereco = enderecos.get(position);
+            status.setText("Abrindo: " + canais.get(position));
+
+            video.setVideoURI(Uri.parse(endereco));
+
+            video.setOnPreparedListener(mp -> {
+                video.start();
+                status.setText("Reproduzindo: " + canais.get(position));
+            });
+
+            video.setOnErrorListener((mp, what, extra) -> {
+                status.setText("Não foi possível reproduzir este canal.");
+                return true;
+            });
+        });
 
         carregar.setOnClickListener(v -> {
             String endereco = campoUrl.getText().toString().trim();
@@ -83,8 +113,9 @@ public class MainActivity extends Activity {
                 HttpURLConnection conexao = null;
 
                 try {
-                    URL url = new URL(endereco);
-                    conexao = (HttpURLConnection) url.openConnection();
+                    conexao = (HttpURLConnection)
+                        new URL(endereco).openConnection();
+
                     conexao.setConnectTimeout(15000);
                     conexao.setReadTimeout(20000);
                     conexao.setRequestProperty(
@@ -103,7 +134,8 @@ public class MainActivity extends Activity {
                         )
                     );
 
-                    ArrayList<String> encontrados = new ArrayList<>();
+                    ArrayList<String> novosCanais = new ArrayList<>();
+                    ArrayList<String> novosEnderecos = new ArrayList<>();
                     String linha;
                     String nome = null;
 
@@ -118,7 +150,8 @@ public class MainActivity extends Activity {
                         } else if (!linha.isEmpty()
                                 && !linha.startsWith("#")
                                 && nome != null) {
-                            encontrados.add(nome);
+                            novosCanais.add(nome);
+                            novosEnderecos.add(linha);
                             nome = null;
                         }
                     }
@@ -127,18 +160,15 @@ public class MainActivity extends Activity {
 
                     runOnUiThread(() -> {
                         canais.clear();
-                        canais.addAll(encontrados);
+                        canais.addAll(novosCanais);
+
+                        enderecos.clear();
+                        enderecos.addAll(novosEnderecos);
+
                         adapter.notifyDataSetChanged();
 
-                        if (canais.isEmpty()) {
-                            status.setText(
-                                "Nenhum canal encontrado. Confira a lista."
-                            );
-                        } else {
-                            status.setText(
-                                canais.size() + " canais encontrados."
-                            );
-                        }
+                        status.setText(canais.size()
+                            + " canais encontrados. Toque em um canal.");
 
                         carregar.setEnabled(true);
                     });
@@ -146,7 +176,7 @@ public class MainActivity extends Activity {
                 } catch (Exception e) {
                     runOnUiThread(() -> {
                         status.setText(
-                            "Não foi possível carregar a lista. Confira a URL."
+                            "Não foi possível carregar a lista."
                         );
                         carregar.setEnabled(true);
                     });
