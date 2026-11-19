@@ -1,6 +1,5 @@
-name: Gerar APK POE IPTV
+name: name: Gerar APK POE IPTV
 
-on:
   workflow_dispatch:
   push:
     branches:
